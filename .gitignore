@@ -5,3 +5,6 @@
 .httr-oauth
 .DS_Store
 .quarto
+app/dane
+app/gdp-happiness-analysis.html
+zaliczenie_R_basiura.Rproj
