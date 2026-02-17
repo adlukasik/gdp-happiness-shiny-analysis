@@ -4,7 +4,7 @@ Projekt zrealizowany w ramach zaliczenia przedmiotu "Programowanie w R". Aplikac
 
 ## Linki do prjektu
 * **[Interaktywna Aplikacja (R Shiny)](https://adam-lukasik.shinyapps.io/gdp-happiness-analysis/)**
-* **[Raport (HTML)](Wklej-Tutaj-Swoj-Link-Do-GitHub-Pages)**
+* **[Raport (HTML)](https://adlukasik.github.io/gdp-happiness-shiny-analysis/app/)**
 
 ## O Projekcie
 
