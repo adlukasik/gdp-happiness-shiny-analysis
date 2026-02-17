@@ -1,4 +1,4 @@
-# Interaktywna Analiza: Pieniądze a Szczęście (GDP vs Happiness)
+# Pieniądze a Szczęście (GDP vs Happiness)
 
 Projekt zrealizowany w ramach zaliczenia przedmiotu "Programowanie w R". Aplikacja bada zależność między PKB per capita a poziomem szczęścia (Cantril Ladder) w ujęciu globalnym i kontynentalnym w latach 2014-2023.
 
