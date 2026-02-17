@@ -1,0 +1,284 @@
+---
+title: "Analiza zależności między PKB per capita a poziomem szczęścia w ujęciu globalnym i kontynentalnym w latach 2014-2023"
+subtitle: "Projekt zaliczeniowy z Programowania w R"
+author: "Grupa Projektowa: Sylwester Sowula, Adam Łukasik"
+logo: dane/logo.png
+date: "`r Sys.Date()`"
+output: 
+  ioslides_presentation:
+    css: dane/mystyle.css
+  
+---
+
+```{r setup, include=FALSE}
+# Opcje globalne dla wszystkich bloków kodu
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align = "center")
+
+# Niezbędne pakiety
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(knitr)
+
+# Wczytywanie surowych danych
+dane1 <- read.csv("dane/gdp-per-capita-worldbank.csv") %>%
+  rename(pkb_per_capita = "GDP.per.capita..PPP..constant.2021.international...")
+
+dane2 <- read.csv("dane/happiness-cantril-ladder.csv")
+kontynent <- read.csv("dane/kontynenty.csv")
+
+
+# wybór danych w ramach czasowych 2014-2023 i usunięcie braków
+pkb <- na.omit(dane1[dane1$Year >= 2014, ])
+hap <- na.omit(dane2[dane2$Year <= 2023, ])
+
+# Łączenie i czyszczenie danych 
+pkb1 <- pkb %>% semi_join(hap, by=c("Entity","Year")) # [dplyr]
+hap1 <- hap %>% semi_join(pkb, by=c("Entity","Year")) # [dplyr]
+colnames(hap1)[4]<-"happiness"
+
+# Dołączenie informacji o kontynentach 
+pkb2 <- na.omit(pkb1 %>% left_join(kontynent, by="Entity")) # [dplyr]
+
+# Tworzymy ostateczną ramkę danych, 
+app_data <- pkb2 %>% 
+  inner_join(hap1, by=c("Entity", "Year")) %>% # [dplyr]
+  select(Entity, Year, Continent, pkb_per_capita, happiness) # [dplyr]
+
+# Definiujemy stałe kolory dla kontynentów dla spójności
+continent_colors <- c(
+  "Africa" = "#66C2A5",
+  "Asia" = "#FC8D62",
+  "Europe" = "#8DA0CB",
+  "North America" = "#E78AC3",
+  "Oceania" = "#A6D854",
+  "South America" = "#FFD92F"
+)
+
+# Obliczenie średnich dla kontynentów 
+continent_avg <- app_data %>%
+  group_by(Continent, Year) %>% # [dplyr]
+  summarise(
+    pkb_per_capita = mean(pkb_per_capita, na.rm = TRUE),
+    happiness = mean(happiness, na.rm = TRUE),
+    .groups = 'drop' 
+  ) %>%
+  rename(Group = Continent)
+
+# Przygotowanie danych dla 'Świata'
+pkb_world_raw <- dane1[dane1$Entity == "World" & dane1$Year >= 2014, ]
+hap_world_raw <- dane2[dane2$Entity == "World" & dane2$Year <= 2023, ]
+
+pkb_world_avg <- pkb_world_raw %>%
+  select(Year, pkb_per_capita)
+
+hap_world_avg <- hap_world_raw %>%
+  select(Year, "Cantril.ladder.score") %>%
+  rename(happiness = "Cantril.ladder.score")
+
+# Połączenie danych dla 'Świata' w jedną ramkę
+world_avg <- pkb_world_avg %>%
+  inner_join(hap_world_avg, by = "Year") %>%
+  mutate(Group = "Świat") # [dplyr]
+
+# Połączenie danych kontynentów i świata
+avg_data <- rbind(world_avg, continent_avg)
+
+# Zmiana na factor, potrzebne do poprawnej kolejności na wykresach
+avg_data$YearFactor <- as.factor(avg_data$Year) 
+avg_data$Group <- as.factor(avg_data$Group)
+# Ustawienie "Świat" na poziom referencyjny
+avg_data$Group <- relevel(avg_data$Group, ref = "Świat")
+```
+
+## Wprowadzenie teoretyczne - Dane
+
+Celem niniejszej pracy jest zbadanie zależności między poziomem PKB per capita a poziomem szczęścia. W naszej pracy korzystamy z dwóch kluczowych pojęć:
+
+- Poziom szczęścia (Life Satisfaction) – w naszych badań jest on mierzony za pomocą Skali Cantrila, w której badani oceniają poziom swojego życia w skali od 0 do 10, gdzie 0 to najgorsze możliwe życie, a 10 to najlepsze możliwe.
+
+- PKB per capita (GDP per capita) – jest to wskaźnik ekonomiczny mierzący wartość wszystkich dóbr i usług wytworzonych w kraju w danym roku, podzielony przez liczbę mieszkańców. W naszych badaniach jest on wyrażony w USD.
+
+
+## Wprowadzenie teoretyczne - Źródła i Przygotowanie danych
+
+- W naszej pracy posłużymy się danymi z bazy danych ([Our World in Data](https://ourworldindata.org/));
+
+- Aby zapewnić spójność czasową ograniczyliśmy zakres od 2014 do 2023 roku;
+
+- Przefiltrowaliśmy dane i usunęliśmy brakujące dane (`na.omit`), co pozwoli przeprowadzić kompletną analizę;
+
+- Połączyliśmy nasze tabele z danymi i dołączyliśmy zmienną kategoryczną ‘Continent’, która pozwoli nam przeanalizować naszą zależność na każdym z kontynentów.
+
+## Analiza danych
+- Przedstawimy podstawowe statystyki opisowe (np. min, max czy średnia) dla PKB per capita i poziomu szczęścia, aby uzyskać ogólny pogląd o naszych danych. Wykonaliśmy je zarówno dla całego zbioru, jak i poszczególnych kontynentów.
+- Zbadamy trendy czasowe według kontynentu i roku. Obliczymy średni poziom szczęścia i PKB per capita w każdym roku i przedstawimy jako wykres liniowy na osi czasu.
+- Zbadamy regresję. Najpierw stworzymy wykresy punktowe, gdzie zmienną objaśniającą jest PKB per capita, a zmienną objaśnianą jest poziom szczęścia, na które następnie nałożymy linie regresji. Aby lepiej określić charakter rozkładu danych, posłużymy się trzema modelami: liniowym, logarytmicznym i pierwiastkowym. Wykonamy to dla całego zbioru, jak i każdego kontynentu.
+
+
+## Użyte Pakiety i ich funkcje
+<div style="font-size: 90%;">
+**`shiny` (Autorzy: Winston Chang i zespół Posit)**
+
+Podstawowy pakiet do budowania interaktywnych aplikacji webowych.
+
+* **Logika UI:** `fluidPage()`, `tabsetPanel()`, `sidebarLayout()`, i `mainPanel()` tworzą strukturę i układ zakładek.
+
+* **Kontrolki:** `sliderInput()`, `selectInput()`, `radioButtons()` i `checkboxGroupInput()` pozwalają użytkownikowi na interaktywne filtrowanie danych. 
+
+* **Wyjścia:** `plotOutput()` i `verbatimTextOutput()` rezerwują miejsce w UI na dynamicznie generowane wykresy i tekst.
+
+* **Logika Serwera:** `reactive({})` tworzy obiekty, które automatycznie przeliczają się, gdy zmienią się filtry.
+
+* **Renderowanie:** `renderPlot({})` i `renderPrint({})` wykonują kod R i renderują jego wynik w odpowiednim miejscu UI.
+</div>
+
+## Użyte Pakiety i ich funkcje cd.
+<div style="font-size: 90%;">
+**`dplyr` (Autor: Hadley Wickham) **
+
+Niezbędny pakiet do manipulacji danymi (część *tidyverse*). Używaliśmy go do filtrowania, łączenia, grupowania i agregowania naszych danych o PKB i szczęściu.
+
+* **Filtrowanie:** `filter()` był używany do dynamicznego wybierania danych na podstawie suwaków lat i wyboru kontynentów.
+
+* **Agregacja:** `group_by() %>% summarise()` to kluczowa kombinacja użyta do obliczenia średnich rocznych (`avg_data`) dla wykresów liniowych.
+
+* **Łączenie:** `inner_join()` i `semi_join()` posłużyły w sekcji przygotowania danych do bezpiecznego połączenia trzech różnych plików CSV.
+</div>
+
+## Użyte Pakiety i ich funkcje cd.
+<div style="font-size: 90%;">
+**`ggplot2` (Autor: Hadley Wickham)**
+
+Narzędzie do wizualizacji danych (również *tidyverse*).
+
+* **Wykresy:** `geom_point()` (wykres punktowy), `geom_boxplot()` (boxplot) i `geom_line()` (trend czasowy) tworzą wizualne warstwy wykresów.
+* **Linia trendu:** `geom_smooth(method = "lm", formula = ...)` pozwolił na dynamiczne dodawanie różnych modeli regresji (liniowej, logarytmicznej, pierwiastkowej).
+
+**`scales` (Autor: Thomas Lin Pedersen)**
+Pakiet pomocniczy dla `ggplot2`, który ułatwia formatowanie osi. Użyliśmy go do jednej kluczowej funkcji: `dollar_format()`, aby czytelnie wyświetlać wartości PKB.
+
+**`bslib` (Autor: Carson Sievert)**
+Pakiet do nowoczesnego stylowania aplikacji Shiny. Wykorzystaliśmy go do szybkiego wdrożenia motywu "pulse" oraz załadowania niestandardowej czcionki Google.
+</div>
+
+
+
+## Statystyki
+<div style="font-size: 75%;">
+* **Min. / Max.:** Wskazują najniższą i najwyższą wartość.
+* **Mediana (Median):** Wskazuje wartość środkową (2 Kwartyl).
+* **Średnia (Mean):**  Średnia arytmetyczna.
+* **1. Kwartyl  / 3. Kwartyl:** Wskazuje 1 i 3 Kwartyl.
+<center>
+```{r statystyki-opisowe, echo = FALSE}
+
+summary_data <- app_data %>%
+  select(pkb_per_capita, happiness)
+
+knitr::kable(summary(summary_data))
+```
+</center></div>
+
+
+## Zmiana szczęścia w czasie
+Sprawdziliśmy również, jak zmieniała się sytuacja na przestrzeni lat. W tym celu zagregowaliśmy dane do średnich dla kontynentów.
+```{r agregacja-czasowa, echo=FALSE}
+# Agregacja danych 
+continent_avg <- app_data %>%
+  group_by(Continent, Year) %>%
+  summarise(pkb_per_capita = mean(pkb_per_capita),
+            happiness = mean(happiness), .groups = 'drop')
+```
+```{r wykres-czasowy, echo=FALSE, fig.width=8, fig.height=4}
+# Wykres zmian szczęścia w czasie
+ggplot(continent_avg, aes(x = Year, y = happiness, color = Continent)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  scale_color_manual(values = continent_colors) +
+  labs(title = "Zmiana średniego poziomu szczęścia (2014-2023)",
+       x = "Rok", y = "Średni poziom szczęścia")
+```
+
+## Zmiana PKB per capita w czasie
+```{r wykres-czasowy-pkb, echo=FALSE, fig.width=8, fig.height=5}
+# Wykres zmian PKB w czasie
+ggplot(continent_avg, aes(x = Year, y = pkb_per_capita, color = Continent)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  scale_color_manual(values = continent_colors) +
+  # Dodajemy formatowanie dolarowe do osi Y
+  scale_y_continuous(labels = dollar_format()) + 
+  labs(title = "Zmiana średniego PKB per capita (2014-2023)",
+       x = "Rok", y = "Średni PKB per capita ($)")
+```
+
+## Regresja (Model Logarytmiczny)
+```{r wykres-globalny, echo=FALSE, fig.width=8, fig.height=5}
+ggplot(app_data, aes(x = pkb_per_capita, y = happiness)) +
+  geom_point(aes(color = Continent), alpha = 0.5, size = 2) +
+  # Dodanie krzywej logarytmicznej
+  geom_smooth(method = "lm", formula = y ~ log(x), color = "#d32f2f", size = 1.2) +
+  theme_minimal() +
+  scale_color_manual(values = continent_colors) +
+  scale_x_continuous(labels = dollar_format()) +
+  labs(title = "Zależność Szczęścia od PKB per capita (Model Logarytmiczny)",
+       x = "PKB per capita ($)", y = "Poziom Szczęścia (0-10)")
+```
+
+## Regresja (Model Logarytmiczny)
+**Analiza:**
+
+Widoczna jest wyraźna, silna korelacja – wraz ze wzrostem zamożności społeczeństwa, rośnie również ich średni poziom zadowolenia z życia. 
+
+Kluczową obserwacją jest nieliniowy charakter tej relacji, dlatego użyliśmy tutaj modelu logarytmicznego, który bardzo dobrze ją opisuje. Jest ona stroma dla krajów o niskim PKB, co oznacza, że na tym etapie rozwoju nawet niewielki wzrost dochodu przynosi duży przyrost szczęścia. 
+
+W miarę wzrostu zamożności krzywa staje się coraz bardziej płaska, co sugeruje, że w bogatszych krajach dalszy wzrost PKB ma już znacznie mniejszy wpływ na zwiększanie poziomu szczęścia.
+
+
+## Nierówności w regionach (Boxplot)
+**Opis:**
+
+Wykres pudełkowy pozwala nam zobaczyć nie tylko średnią, ale także zróżnicowanie wewnątrz kontynentów.
+
+* "Pudełko" pokazuje zakres, w którym mieści się 50% kraju,
+* Kropki to poszczególne kraje, dzięki temu widzimy rozrzut danych 
+
+## Boxplot - PKB per capita
+```{r wykres-pudelkowy, echo=FALSE, fig.width=8, fig.height=5.5}
+# Przygotowanie danych (tak jak w Shiny-projekt.R dla zakładki 3)
+# Używamy danych bez agregacji (app_data), bo boxplot potrzebuje punktów
+ggplot(app_data, aes(x = Continent, y = pkb_per_capita, fill = Continent)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) + 
+  geom_jitter(width = 0.2, alpha = 0.4, size = 1.5, color = "#333333") +
+  theme_minimal() +
+  theme(legend.position = "none", 
+        axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  scale_fill_manual(values = continent_colors) +
+  scale_y_continuous(labels = dollar_format())
+```
+
+## Boxplot - PKB per capita
+**Analiza rozkładu zamożności:**
+
+- **Ogromne dysproporcje w Azji:** Kontynent ten cechuje się największymi nierównościami. Widoczny jest gigantyczny rozrzut – od krajów skrajnie biednych, po jedne z najbogatszych na świecie.
+- **Stabilność Oceanii vs różnorodność Europy:** Oba regiony mają wysoką medianę, ale Oceania jest mocno skupiona (kraje o podobnym bogactwie), podczas gdy Europa wykazuje duże zróżnicowanie. Jest to jednak spowodowane niewielką ilością danych dla Oceanii.
+- **Afryka:** Charakteryzuje się najniższą medianą, a większość państw jest mocno skoncentrowana w dolnym przedziale wykresu.
+
+## Wnioski
+
+Z przeprowadzonej analizy wynikają cztery główne wnioski:
+
+* **Silna pozytywna korelacja:** Nasza analiza potwierdza istnienie silnego, dodatniego związku między PKB per capita a poziomem szczęścia. Mówiąc prościej: bogatsze kraje są generalnie szczęśliwsze.
+
+* **Prawo malejących przychodów:** Związek ten nie jest liniowy, lecz **logarytmiczny**. Wzrost dochodów ma największy wpływ na szczęście w krajach uboższych. W krajach bogatych (jak Europa), gdzie podstawowe potrzeby są zaspokojone, dalszy wzrost PKB ma już znacznie mniejszy wpływ na poziom szczęścia.
+
+## Wnioski cd.
+
+* **Wyraźne dysproporcje regionalne:** Analiza kontynentalna ujawnia duże różnice. Europa konsekwentnie wyprzedza średnią światową zarówno pod względem zamożności (ponad dwukrotnie), jak i deklarowanego poziomu szczęścia.
+
+* **Stabilność trendów:** Trendy czasowe w ostatniej dekadzie (2014-2023) są stosunkowo stabilne. Poziomy szczęścia i PKB rosną powoli, z niewielkimi wahaniami (np. lekkim spadkiem szczęścia w 2020 r.), co pokazuje dużą bezwładność tych wskaźników.
+
+
