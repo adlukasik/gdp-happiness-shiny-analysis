@@ -1,6 +1,6 @@
 # Pieniądze a Szczęście (GDP vs Happiness)
 
-Projekt zrealizowany w ramach zaliczenia przedmiotu "Programowanie w R". Aplikacja bada zależność między PKB per capita a poziomem szczęścia (Cantril Ladder) w ujęciu globalnym i kontynentalnym w latach 2014-2023.
+Aplikacja bada zależność między PKB per capita a poziomem szczęścia (Cantril Ladder) w ujęciu globalnym i kontynentalnym w latach 2014-2023.
 
 ## Linki do prjektu
 * **[Interaktywna Aplikacja (R Shiny)](https://adam-lukasik.shinyapps.io/gdp-happiness-analysis/)**
@@ -10,7 +10,7 @@ Projekt zrealizowany w ramach zaliczenia przedmiotu "Programowanie w R". Aplikac
 
 Celem projektu jest zweryfikowanie hipotezy o wpływie zamożności kraju na poziom zadowolenia jego mieszkańców. Aplikacja pozwala użytkownikowi na samodzielną eksplorację danych, filtrowanie według regionów oraz analizę trendów w czasie.
 
-**Główne wnioski z analizy (EDA):**
+**Główne wnioski z analizy :**
 * Istnieje silna dodatnia korelacja między PKB a szczęściem.
 * Zależność ta najlepiej opisywana jest przez **model logarytmiczny** (prawo malejących przychodów) – wzrost dochodów w krajach uboższych daje większy przyrost szczęścia niż w krajach bogatych.
 
